@@ -1,0 +1,25 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@google-cloud/firestore": "^7.11.3",
+    "@google-cloud/storage": "^7.17.3",
+    "axios": "^1.13.1",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "fetch": "^1.1.0",
+    "firebase-admin": "^13.6.0",
+    "multer": "^2.0.2",
+    "node": "^25.1.0"
+  }
+}
