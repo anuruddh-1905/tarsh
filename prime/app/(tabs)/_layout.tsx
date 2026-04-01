@@ -16,8 +16,40 @@ import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
+function webShellColors(scheme: 'light' | 'dark' | null | undefined) {
+  if (scheme === 'light') {
+    return {
+      webLayoutBg: '#F1F5F9',
+      sidebarBg: '#FFFFFF',
+      sidebarBorder: '#E2E8F0',
+      hamburgerIcon: '#334155',
+      sidebarTitle: '#0F172A',
+      iconMuted: '#64748B',
+      iconActive: '#0284C7',
+      textMuted: '#475569',
+      textActive: '#0284C7',
+      itemActiveBg: '#E0F2FE',
+      webContentBg: '#F1F5F9',
+    };
+  }
+  return {
+    webLayoutBg: '#020617',
+    sidebarBg: '#020617',
+    sidebarBorder: '#0F172A',
+    hamburgerIcon: '#E2E8F0',
+    sidebarTitle: '#F8FAFC',
+    iconMuted: '#CBD5E1',
+    iconActive: '#38BDF8',
+    textMuted: '#CBD5E1',
+    textActive: '#38BDF8',
+    itemActiveBg: '#0F172A',
+    webContentBg: '#020617',
+  };
+}
+
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const webColors = webShellColors(colorScheme);
   const isWeb = Platform.OS === 'web';
   const router = useRouter();
   const pathname = usePathname();
@@ -29,7 +61,7 @@ export default function TabLayout() {
   const sidebarItems = useMemo(
     () => [
       { key: 'dashboard', label: 'Dashboard', route: '/explore', icon: 'bar-chart' },
-      { key: 'history', label: 'History', route: '/explore', icon: 'clock' },
+      { key: 'history', label: 'History', route: '/history', icon: 'clock' },
       { key: 'templates', label: 'Templates', route: '/explore', icon: 'layers' },
       {
         key: 'ui',
@@ -38,8 +70,7 @@ export default function TabLayout() {
         icon: 'cloud-upload',
       },
       { key: 'profile', label: 'Profile', route: '/profile', icon: 'account-circle' },
-      // No dedicated settings screen yet; navigate to profile for now.
-      { key: 'settings', label: 'Settings', route: '/profile', icon: 'settings' },
+      { key: 'settings', label: 'Settings', route: '/settings', icon: 'settings' },
       // Sign out: route to login (frontend-only for now).
       { key: 'logout', label: 'Logout', route: '/login', icon: 'logout' },
     ],
@@ -79,8 +110,12 @@ export default function TabLayout() {
     const topItems = sidebarItems.filter((i) => i.key !== 'logout');
 
     return (
-      <View style={styles.webLayout}>
-        <Animated.View style={[styles.sidebar, { width: sidebarWidth }]}>
+      <View style={[styles.webLayout, { backgroundColor: webColors.webLayoutBg }]}>
+        <Animated.View
+          style={[
+            styles.sidebar,
+            { width: sidebarWidth, backgroundColor: webColors.sidebarBg, borderRightColor: webColors.sidebarBorder },
+          ]}>
           <View style={styles.sidebarInner}>
             <View style={styles.sidebarHeader}>
               <Pressable
@@ -90,7 +125,7 @@ export default function TabLayout() {
                 <MaterialIcons
                   name="menu"
                   size={24}
-                  color="#E2E8F0"
+                  color={webColors.hamburgerIcon}
                 />
               </Pressable>
 
@@ -99,7 +134,7 @@ export default function TabLayout() {
                   styles.sidebarTitleWrap,
                   { opacity: labelOpacity, width: labelWidth, transform: [{ translateX: labelTranslateX }] },
                 ]}>
-                <Text style={styles.sidebarTitle}>Prime</Text>
+                <Text style={[styles.sidebarTitle, { color: webColors.sidebarTitle }]}>Prime</Text>
               </Animated.View>
             </View>
 
@@ -118,14 +153,14 @@ export default function TabLayout() {
                     }}
                     style={[
                       styles.sidebarItem,
-                      isActive && styles.sidebarItemActive,
+                      isActive && { backgroundColor: webColors.itemActiveBg },
                       !sidebarOpen && styles.sidebarItemCollapsed,
                     ]}>
                     <View style={styles.sidebarIconWrap}>
                       <MaterialIcons
                         name={item.icon as any}
                         size={20}
-                        color={isActive ? '#38BDF8' : '#CBD5E1'}
+                        color={isActive ? webColors.iconActive : webColors.iconMuted}
                       />
                     </View>
 
@@ -137,7 +172,7 @@ export default function TabLayout() {
                       <Text
                         style={[
                           styles.sidebarItemText,
-                          isActive && styles.sidebarItemTextActive,
+                          { color: isActive ? webColors.textActive : webColors.textMuted },
                         ]}>
                         {item.label}
                       </Text>
@@ -168,7 +203,7 @@ export default function TabLayout() {
           </View>
         </Animated.View>
 
-        <View style={styles.webContent}>
+        <View style={[styles.webContent, { backgroundColor: webColors.webContentBg }]}>
           <Slot />
         </View>
       </View>
@@ -201,6 +236,22 @@ export default function TabLayout() {
             <MaterialIcons name="account-circle" size={28} color={color} />,
         }}
       />
+
+      <Tabs.Screen
+        name="settings"
+        options={{
+          href: null,
+          title: 'Settings',
+        }}
+      />
+
+      <Tabs.Screen
+        name="history"
+        options={{
+          href: null,
+          title: 'Charts',
+        }}
+      />
     </Tabs>
   );
 }
@@ -209,12 +260,9 @@ const styles = StyleSheet.create({
   webLayout: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#020617',
   },
   sidebar: {
-    backgroundColor: '#020617', // slate-950
     borderRightWidth: 1,
-    borderRightColor: '#0F172A',
     height: '100%',
   },
   sidebarInner: {
@@ -240,7 +288,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   sidebarTitle: {
-    color: '#F8FAFC',
     fontSize: 20,
     fontWeight: '700',
   },
@@ -260,9 +307,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 0,
   },
-  sidebarItemActive: {
-    backgroundColor: '#0F172A',
-  },
   sidebarIconWrap: {
     width: 32,
     alignItems: 'center',
@@ -273,12 +317,8 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   sidebarItemText: {
-    color: '#CBD5E1',
     fontSize: 15,
     fontWeight: '500',
-  },
-  sidebarItemTextActive: {
-    color: '#38BDF8',
   },
   sidebarLogout: {
     flexDirection: 'row',
@@ -295,7 +335,6 @@ const styles = StyleSheet.create({
   },
   webContent: {
     flex: 1,
-    backgroundColor: '#020617',
   },
 });
 
