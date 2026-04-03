@@ -62,7 +62,7 @@ export default function TabLayout() {
     () => [
       { key: 'dashboard', label: 'Dashboard', route: '/explore', icon: 'bar-chart' },
       { key: 'history', label: 'History', route: '/history', icon: 'clock' },
-      { key: 'templates', label: 'Templates', route: '/explore', icon: 'layers' },
+      { key: 'templates', label: 'Templates', route: '/templates', icon: 'layers' },
       {
         key: 'ui',
         label: 'UI (Upload)',
@@ -250,6 +250,14 @@ export default function TabLayout() {
         options={{
           href: null,
           title: 'Charts',
+        }}
+      />
+
+      <Tabs.Screen
+        name="templates"
+        options={{
+          href: null,
+          title: 'Templates',
         }}
       />
     </Tabs>
