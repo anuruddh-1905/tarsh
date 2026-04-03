@@ -229,6 +229,22 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="explore"
+        options={{
+          href: null,
+          title: 'Dashboard',
+        }}
+      />
+
+      <Tabs.Screen
+        name="index"
+        options={{
+          href: null,
+          title: 'Dashboard',
+        }}
+      />
+
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

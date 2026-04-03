@@ -4,10 +4,12 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useStats } from '@/context/StatsContext';
 
 const UI = () => {
     const colorScheme = useColorScheme();
     const isDark = colorScheme === 'dark';
+    const { recordGeneratedInfographic } = useStats();
 
     const theme = useMemo(
       () =>
@@ -151,9 +153,11 @@ const UI = () => {
     console.log("✅ Upload success:", resultData);
 
     if (response.ok) {
-      setGeneratedurl(`http://127.0.0.1:5000/api/infographic/download/${resultData.infographicId}`);
+      const resultUrl = `http://127.0.0.1:5000/api/infographic/download/${resultData.infographicId}`;
+      setGeneratedurl(resultUrl);
       setStatus("success");
       setStatusMessage("✅ Infographic generated successfully!");
+      recordGeneratedInfographic(file.name, resultUrl);
     } else {
       setStatus("error");
       setStatusMessage(resultData.message || "⚠️ Upload failed.");

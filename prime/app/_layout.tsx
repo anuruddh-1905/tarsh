@@ -1,3 +1,4 @@
+import { StatsProvider } from '@/context/StatsContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
@@ -35,8 +36,10 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
-      <RootNavigation />
-    </ThemeProvider>
+    <StatsProvider>
+      <ThemeProvider>
+        <RootNavigation />
+      </ThemeProvider>
+    </StatsProvider>
   );
 }

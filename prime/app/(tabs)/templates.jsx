@@ -1,4 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import {
   Platform,
@@ -13,6 +14,7 @@ import {
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 const Templates = () => {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { width } = useWindowDimensions();
@@ -96,10 +98,11 @@ const Templates = () => {
 
             <Pressable
               accessibilityRole="button"
-              onPress={() => {}}
+              onPress={() => router.push('/UI')}
               style={({ pressed }) => [
                 styles.primaryBtn,
                 { backgroundColor: pressed ? t.primaryBtnPressed : t.primaryBtnBg },
+                pressed && styles.primaryBtnPressed,
               ]}
             >
               <Text style={[styles.primaryBtnText, { color: t.primaryBtnText }]}>Use This</Text>
@@ -242,6 +245,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  primaryBtnPressed: {
+    transform: [{ scale: 0.98 }],
   },
   primaryBtnText: {
     fontSize: 15,
