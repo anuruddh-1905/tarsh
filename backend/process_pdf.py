@@ -1,5 +1,6 @@
 import os
 import io
+import json
 from datetime import datetime
 
 from flask import Flask, request, jsonify
@@ -19,21 +20,39 @@ from firebase_admin import credentials, firestore
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # =========================================================
-# CONFIG
+# CONFIG & SECURE INITIALIZATION
 # =========================================================
 
 GCS_BUCKET = "prime-app-infographics"
-SERVICE_ACCOUNT_FILE = "service-account.json"
 PROJECT_ID = "prime-app-467705"
+SERVICE_ACCOUNT_FILE = "service-account.json"
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_FILE
+# Check if running on Render with environment variable injection
+if "GOOGLE_APPLICATION_CREDENTIALS_JSON" in os.environ:
+    # Production Environment
+    try:
+        cred_json = json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
+        cred = credentials.Certificate(cred_json)
+        
+        # Instantiate clients with explicit memory credentials
+        storage_client = storage.Client(credentials=cred.get_credential(), project=PROJECT_ID)
+        firestore_client = firestore.Client(credentials=cred.get_credential(), project=PROJECT_ID)
+    except Exception as e:
+        print(f"❌ Error parsing GOOGLE_APPLICATION_CREDENTIALS_JSON: {e}")
+        raise e
+else:
+    # Local Development Fallback
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_FILE
+    cred = credentials.Certificate(SERVICE_ACCOUNT_FILE)
+    storage_client = storage.Client()
+    firestore_client = firestore.Client()
 
-cred = credentials.Certificate(SERVICE_ACCOUNT_FILE)
-firebase_admin.initialize_app(cred)
+# Initialize Firebase Admin SDK precisely once
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred)
 
-storage_client = storage.Client()
 bucket = storage_client.bucket(GCS_BUCKET)
-firestore_client = firestore.Client()
+db = firestore.client()
 
 app = Flask(__name__)
 CORS(app)
@@ -233,12 +252,10 @@ def analyze():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # =========================================================
-# AUTH ROUTES (UNCHANGED)
+# AUTH ROUTES
 # =========================================================
 
-db = firestore.client()
-
-@app.post("/api/auth/signup")
+@app.route("/api/auth/signup", methods=["POST"])
 def signup():
     data = request.get_json()
     username = data.get("username")
@@ -263,7 +280,7 @@ def signup():
 
     return jsonify({"message": "Account created"}), 201
 
-@app.post("/api/auth/login")
+@app.route("/api/auth/login", methods=["POST"])
 def login():
     data = request.get_json()
     email = data.get("email")
@@ -284,7 +301,7 @@ def login():
 
     return jsonify({"message": "Login successful"}), 200
 
-@app.post("/api/auth/reset-password")
+@app.route("/api/auth/reset-password", methods=["POST"])
 def reset_password():
     data = request.get_json()
     email = data.get("email")
@@ -313,4 +330,6 @@ def reset_password():
 # =========================================================
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=6000, debug=True)
+    # Dynamically bind to the port assigned by Render, default to 6000 locally.
+    port = int(os.environ.get("PORT", 6000))
+    app.run(host="0.0.0.0", port=port, debug=False)
