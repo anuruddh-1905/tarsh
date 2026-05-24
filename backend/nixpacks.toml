@@ -1,10 +1,7 @@
-providers = ["python"]
-
-[phases.setup]
-nixPkgs = ["python311", "python311Packages.pip"]
+providers = ["node"]
 
 [phases.install]
-cmds = ["pip3 install -r requirements.txt --break-system-packages"]
+cmds = ["npm ci --no-audit --audit=false"]
 
 [phases.build]
 cmds = []
