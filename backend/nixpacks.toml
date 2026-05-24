@@ -1,5 +1,8 @@
 providers = ["node"]
 
+[phases.setup]
+nixPkgs = ["nodejs_20", "libatomic"]
+
 [phases.install]
 cmds = ["npm ci --no-audit --audit=false"]
 
