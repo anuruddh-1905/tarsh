@@ -1,10 +1,10 @@
 providers = ["node"]
 
 [phases.setup]
-nixPkgs = ["nodejs_20", "libatomic_ops"]
+nixPkgs = ["nodejs_20", "gcc-unwrapped"]
 
 [phases.install]
-cmds = ["npm ci --no-audit --audit=false"]
+cmds = ["npm ci --no-audit --audit=false --ignore-scripts"]
 
 [phases.build]
 cmds = []
