@@ -4,6 +4,7 @@ const multer = require("multer");
 const { Storage } = require("@google-cloud/storage");
 const path = require("path");
 const { Firestore } = require("@google-cloud/firestore");
+const axios = require("axios");
 
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
@@ -13,21 +14,35 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const port = 5000;
+// Render injects a dynamic PORT environment variable. Fallback to 5000 locally.
+const port = process.env.PORT || 5000;
 
-/* ---------------- CONFIG ---------------- */
+// Dynamic internal or external URL for the Python Flask runtime
+const PYTHON_ENGINE_URL = process.env.PYTHON_ENGINE_URL || "http://127.0.0.1:6000";
 
-const serviceKey = path.join(__dirname, "service-account.json");
+/* ---------------- CONFIG & SECURE INITIALIZATION ---------------- */
 
-const firestore = new Firestore({
-  projectId: "prime-app-467705",
-  keyFilename: serviceKey,
-});
+let firestoreOptions = { projectId: "prime-app-467705" };
+let storageOptions = { projectId: "prime-app-467705" };
 
-const storage = new Storage({
-  projectId: "prime-app-467705",
-  keyFilename: serviceKey,
-});
+if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+  try {
+    // Production Environment: Parse the injected environment credentials directly
+    const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+    firestoreOptions.credentials = credentials;
+    storageOptions.credentials = credentials;
+  } catch (error) {
+    console.error("❌ Error parsing GOOGLE_APPLICATION_CREDENTIALS_JSON:", error.message);
+  }
+} else {
+  // Local Development Fallback: Read from local disk file path
+  const serviceKey = path.join(__dirname, "service-account.json");
+  firestoreOptions.keyFilename = serviceKey;
+  storageOptions.keyFilename = serviceKey;
+}
+
+const firestore = new Firestore(firestoreOptions);
+const storage = new Storage(storageOptions);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -37,7 +52,7 @@ const upload = multer({
 
 app.post("/api/auth/signup", async (req, res) => {
   try {
-    const response = await fetch("http://127.0.0.1:6000/api/auth/signup", {
+    const response = await fetch(`${PYTHON_ENGINE_URL}/api/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body),
@@ -53,7 +68,7 @@ app.post("/api/auth/signup", async (req, res) => {
 
 app.post("/api/auth/login", async (req, res) => {
   try {
-    const response = await fetch("http://127.0.0.1:6000/api/auth/login", {
+    const response = await fetch(`${PYTHON_ENGINE_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body),
@@ -69,8 +84,7 @@ app.post("/api/auth/login", async (req, res) => {
 
 app.post("/api/auth/reset-password", async (req, res) => {
   try {
-    const response = await fetch(
-      "http://127.0.0.1:6000/api/auth/reset-password",
+    const response = await fetch(`${PYTHON_ENGINE_URL}/api/auth/reset-password`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -103,8 +117,6 @@ app.get("/api/infographic", async (req, res) => {
     res.status(500).json({ error: "Failed to retrieve infographics." });
   }
 });
-
-//  ...
 
 app.get("/api/infographic/download/:id", async (req, res) => {
   try {
@@ -170,8 +182,7 @@ app.post(
       const infographicId = infographicRef.id;
 
       /* ---- Call Flask (WAIT FOR RESULT) ---- */
-      const axios = require("axios");
-      const flaskUrl = "http://127.0.0.1:6000/analyze";
+      const flaskUrl = `${PYTHON_ENGINE_URL}/analyze`;
 
       const flaskResponse = await axios.post(flaskUrl, {
         infographicId,
