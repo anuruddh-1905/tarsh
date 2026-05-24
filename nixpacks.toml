@@ -2,3 +2,9 @@ providers = ["node"]
 
 [phases.install]
 cmds = ["npm ci --no-audit --audit=false"]
+
+[phases.build]
+cmds = ["npx expo export --platform web"]
+
+[start]
+cmd = "npx serve dist"
