@@ -12,8 +12,6 @@ export default function Login(){
     const [passwordValid, setPasswordValid] = useState(null);
     const [serverError, setServerError] = useState(null);
 
-
-
     const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
 
     const validEmail = (text) => {
@@ -32,7 +30,7 @@ export default function Login(){
         }
 
         try{
-            const res = await fetch("http://127.0.0.1:5000/api/auth/login", {
+            const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/auth/login`, {
                 method: "POST",
                 headers: { "Content-Type" : "application/json"},
                 body: JSON.stringify({email, password}),
@@ -41,7 +39,7 @@ export default function Login(){
             const data = await res.json();
 
             if(res.status === 200){
-                window.location.href = "\UI";
+                window.location.href = "/UI";
                 return;
             }
 
@@ -53,7 +51,6 @@ export default function Login(){
             setServerError(data.message || "Login Failed");
         }catch(_error){
             setServerError("Network error.  Try again");
-            
         }
     }
 

@@ -118,17 +118,15 @@ const UI = () => {
 
     const handleSelectAndUpload = async () => {
   try {
-    
     const result = await DocumentPicker.getDocumentAsync({
-  type: [
-    "application/pdf", 
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-    "application/vnd.ms-excel", 
-    "text/csv" 
-  ],
-});
+      type: [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel",
+        "text/csv"
+      ],
+    });
 
-    
     if (result.canceled || !result.assets || result.assets.length === 0) {
       alert("No file selected");
       return;
@@ -138,13 +136,12 @@ const UI = () => {
     setSelectedFile(file);
     console.log("📄 Selected File:", file.name);
 
-   const fileBlob = await fetch(file.uri).then(res => res.blob()); 
-   const formData = new FormData();
-
-   formData.append("pdfFile", fileBlob, file.name);
+    const fileBlob = await fetch(file.uri).then(res => res.blob());
+    const formData = new FormData();
+    formData.append("pdfFile", fileBlob, file.name);
 
     setIsProcessing(true);
-    const response = await fetch("http://127.0.0.1:5000/api/infographic/create", {
+    const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/infographic/create`, {
       method: "POST",
       body: formData,
     });
@@ -153,7 +150,7 @@ const UI = () => {
     console.log("✅ Upload success:", resultData);
 
     if (response.ok) {
-      const resultUrl = `http://127.0.0.1:5000/api/infographic/download/${resultData.infographicId}`;
+      const resultUrl = `${process.env.EXPO_PUBLIC_API_URL}/api/infographic/download/${resultData.infographicId}`;
       setGeneratedurl(resultUrl);
       setStatus("success");
       setStatusMessage("✅ Infographic generated successfully!");
@@ -188,29 +185,26 @@ return (
   </Link>
 </View>
 
-      
-
         <Text style={composed.title}>Prime</Text>
         <View style={composed.in}>
 
-            {/*<Text style={styles.PlaceholderText}>upload your pdf here</Text>*/}
             {!generatedurl ? (
             <Pressable
             style={composed.uploadButton}
             onPress={handleSelectAndUpload}
             disabled={isProcessing}
             >
-            <Text style={composed.uploadButtonText}> 
+            <Text style={composed.uploadButtonText}>
                 {isProcessing ? 'processing..' : 'Upload PDF'}
             </Text>
             </Pressable>
             ) : (
-                <Pressable 
+                <Pressable
                 style={styles.downloadButton}
                 onPress={() => {
                 const link = document.createElement("a");
                 link.href = generatedurl;
-                link.download = "infographic.pdf"; 
+                link.download = "infographic.pdf";
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -225,16 +219,15 @@ return (
             )}
 
             {status === "success" && (
-  <Text style={composed.successMessage}>✅ File is ready for download!</Text>
-)}
+              <Text style={composed.successMessage}>✅ File is ready for download!</Text>
+            )}
 
-{status === "error" && (
-  <Text style={composed.errorMessage}>❌ {statusMessage}</Text>
-)}
-
+            {status === "error" && (
+              <Text style={composed.errorMessage}>❌ {statusMessage}</Text>
+            )}
 
         </View>
-        
+
     </View>
 )
 }
@@ -284,8 +277,6 @@ signupText: {
   fontSize: 14,
 },
 
-
-
     in:{
         width: '70%',
         height: 220,
@@ -306,7 +297,7 @@ signupText: {
         fontWeight: '700',
         marginBottom: 100,
         letterSpacing: 1,
-        textTransform: 'uppercase',      
+        textTransform: 'uppercase',
     },
 
     butt: {
@@ -316,7 +307,7 @@ signupText: {
       width: '100%',
       marginTop: 75,
     },
-    
+
     icon: {
        backgroundColor: '#2563EB',
        borderRadius: 8,
@@ -406,7 +397,6 @@ errorMessage: {
   marginTop: 15,
   fontWeight: "600",
 },
-
 
 })
 

@@ -2,8 +2,6 @@ import { Link } from "expo-router";
 import { Button, StyleSheet, Text, TextInput, View, Alert} from 'react-native';
 import { BlurView} from "expo-blur";
 import  {useState} from "react";
-//import { useEffect } from 'react';
-//import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { ImageBackground, Pressable } from "react-native-web";
 
 const App = () =>{
@@ -37,7 +35,7 @@ const App = () =>{
             const hasUpperCase = /[A-Z]/.test(text);
             const hasLowerCase = /[a-z]/.test(text);
             const hasNumber =  /[0-9]/.test(text);
-             const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(text);
+            const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(text);
             
             if(password.length >= 4 &&
                 hasUpperCase &&
@@ -52,6 +50,7 @@ const App = () =>{
                 Alert.alert("password must cantain uppercase, lowercase, number and specialchar");
             }
         }
+
         function handleEmail(text){
             setEmail(text);
             if(emailRegex.test(text)){
@@ -70,7 +69,7 @@ const App = () =>{
             }
 
             try{
-                const res = await fetch("http://127.0.0.1:5000/api/auth/signup", {
+                const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/auth/signup`, {
                     method: "POST",
                     headers: {"Content-Type":"application/json"},
                     body: JSON.stringify({
@@ -91,7 +90,6 @@ const App = () =>{
                     return;
                 }
 
-                //Any other error
                 setServerError(data.message || "Sign up failed");
 
             }catch(error){
@@ -100,15 +98,6 @@ const App = () =>{
             }
         }
 
-       /* useEffect(() = {
-          GoogleSignin.configure({
-            iosClientId: "435868451228-hoftgst2bengto33pr1dtt8jlrcb2ufo.apps.googleusercontent.com",
-            webClientId: "435868451228-t3fnl5795qu3v16oog6nia6p5kqngfss.apps.googleusercontent.com",
-
-            profileImageSize: 150,
-          })
-        })
-*/
     return(
         <View style={styles.container}>
         <ImageBackground 
@@ -119,7 +108,6 @@ const App = () =>{
             <Text style = {styles.subText}>
                 Sign up to explore your infographics dashboard
             </Text>
-            {/*<Text style={styles.title}>Welcome to Prime</Text>*/}
 
             <TextInput 
             style = {[styles.input, name.length < 1? null : nameVerify ? styles.validInput : styles.invalidInput]}
@@ -166,21 +154,18 @@ const App = () =>{
 }
 
 const styles = StyleSheet.create({
-    
     container: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: "#E0EAFC",
     },
-
     background: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         width: "100%",
     },
-
     glassCard: {
         width: 490,
         height: 500,
@@ -215,7 +200,6 @@ const styles = StyleSheet.create({
         color: "#1E1E1E",
         marginBottom: 10,
     },
-    
     input: {
         width: 280,
         height: 45,
