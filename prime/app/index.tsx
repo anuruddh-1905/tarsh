@@ -1,5 +1,10 @@
-import { Redirect } from "expo-router";
+import { useEffect } from "react";
+import { useRouter } from "expo-router";
 
 export default function Index() {
-  return <Redirect href="/UI" />;
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/UI");
+  }, [router]);
+  return null;
 }
