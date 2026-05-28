@@ -7,4 +7,4 @@ cmds = ["npm ci --no-audit --audit=false"]
 cmds = ["npx expo export --platform web"]
 
 [start]
-cmd = "npx serve dist"
+cmd = "npx serve dist --single"
