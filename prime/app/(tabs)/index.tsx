@@ -76,12 +76,12 @@ export default function DashboardScreen() {
     [totalFiles, infographicsCount],
   );
 
-  const latestActivity = useMemo(
+ const latestActivity = useMemo(
     () =>
-      recentActivity.slice(0, 2).map((item) => ({
-        key: item.id,
-        fileName: item.fileName,
-        at: formatRelativeTime(item.createdAt),
+      ((recentActivity || []) as any[]).slice(0, 2).map((item: any) => ({
+        key: item?.id || Math.random().toString(),
+        fileName: item?.fileName || 'Unnamed File',
+        at: formatRelativeTime(item?.createdAt || ''),
         icon: 'insert-drive-file',
       })),
     [recentActivity],
@@ -140,7 +140,7 @@ export default function DashboardScreen() {
           ]}
         >
           <View style={styles.primaryBtnInner}>
-            <MaterialIcons name="sparkles" size={18} color={t.btnText} />
+            <MaterialIcons name="auto-awesome" size={18} color={t.btnText} />
             <Text style={[styles.primaryBtnText, { color: t.btnText }]}>Create New Infographic</Text>
           </View>
         </Pressable>
@@ -155,7 +155,7 @@ export default function DashboardScreen() {
               <Text style={[styles.emptyText, { color: t.textMuted }]}>No activity yet. Generate your first infographic.</Text>
             </View>
           ) : (
-            latestActivity.map((a, idx) => (
+            latestActivity.map((a: any, idx: number) => (
               <View key={a.key}>
                 {idx > 0 ? <View style={[styles.activityDivider, { backgroundColor: t.divider }]} /> : null}
                 <View style={styles.activityRow}>
