@@ -172,7 +172,7 @@ app.post(
       const newInfographic = {
         title: req.body.title || req.file.originalname,
         imageUrl: publicUrl,
-        status: "uploaded",
+        status: "processing",
         result: null,
         createdAt: new Date(),
       };
@@ -181,25 +181,45 @@ app.post(
       await infographicRef.set(newInfographic);
       const infographicId = infographicRef.id;
 
-      /* ---- Call Flask (WAIT FOR RESULT) ---- */
+      /* ---- Trigger Python engine in background (do not block response) ---- */
       const flaskUrl = `${PYTHON_ENGINE_URL}/analyze`;
 
-      const flaskResponse = await axios.post(flaskUrl, {
+      axios
+        .post(flaskUrl, {
+          infographicId,
+          pdf_url: publicUrl,
+          title: newInfographic.title,
+        })
+        .then(() => {
+          console.log("Flask processing completed for", infographicId);
+        })
+        .catch(async (error) => {
+          console.error(
+            "Background processing error for",
+            infographicId,
+            error.message
+          );
+          try {
+            await firestore.collection("infographics").doc(infographicId).update({
+              status: "failed",
+              error: error.message,
+              updatedAt: new Date(),
+            });
+          } catch (updateError) {
+            console.error(
+              "Failed to update Firestore after processing error:",
+              updateError
+            );
+          }
+        });
+
+      /* ---- Return immediately; client can poll or refresh for completion ---- */
+      res.status(202).json({
+        message: "Infographic accepted for processing",
         infographicId,
-        pdf_url: publicUrl,
-        title: newInfographic.title,
       });
 
-      console.log("Flask processing completed for", infographicId);
-
-      /* ---- Return FINAL response to frontend ---- */
-      res.status(201).json({
-        message: "Infographic generated successfully",
-        infographicId,
-        download_url: flaskResponse.data.download_url,
-      });
-
-      console.log("📤 Response sent to frontend");
+      console.log("📤 202 Accepted sent to frontend for", infographicId);
     } catch (error) {
       console.error("Error during upload or processing:", error);
       res.status(500).json({

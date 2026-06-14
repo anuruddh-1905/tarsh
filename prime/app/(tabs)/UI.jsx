@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -31,7 +31,7 @@ const UI = () => {
               error: '#F87171',
             }
           : {
-              outBg: '#F1F5F9',
+              outBg: '#F1F5FSlate',
               title: '#1E293B',
               inBg: '#F8FAFC',
               inBorder: '#CBD5E1',
@@ -141,29 +141,57 @@ const UI = () => {
     formData.append("pdfFile", fileBlob, file.name);
 
     setIsProcessing(true);
+    setStatus("processing");
+    setStatusMessage("⏳ Uploading and initializing processing engine...");
+
     const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/infographic/create`, {
       method: "POST",
       body: formData,
     });
 
     const resultData = await response.json();
-    console.log("✅ Upload success:", resultData);
+    console.log("✅ Server response:", resultData);
 
-    if (response.ok) {
-      const resultUrl = `${process.env.EXPO_PUBLIC_API_URL}/api/infographic/download/${resultData.infographicId}`;
-      setGeneratedurl(resultUrl);
-      setStatus("success");
-      setStatusMessage("✅ Infographic generated successfully!");
-      recordGeneratedInfographic(file.name, resultUrl);
+    if (response.status === 202 || response.ok) {
+      const activeId = resultData.infographicId;
+      setStatusMessage("⚙️ Generating metrics and layout graphs... Please wait.");
+      
+      // Initialize internal structural tracking poll loop
+      const pollInterval = setInterval(async () => {
+        try {
+          const checkResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/infographic/${activeId}`);
+          if (checkResponse.ok) {
+            const checkData = await checkResponse.json();
+            
+            if (checkData.status === "completed") {
+              clearInterval(pollInterval);
+              const resultUrl = `${process.env.EXPO_PUBLIC_API_URL}/api/infographic/download/${activeId}`;
+              setGeneratedurl(resultUrl);
+              setStatus("success");
+              setStatusMessage("✅ Infographic generated successfully!");
+              recordGeneratedInfographic(file.name, resultUrl);
+              setIsProcessing(false);
+            } else if (checkData.status === "failed") {
+              clearInterval(pollInterval);
+              setStatus("error");
+              setStatusMessage(checkData.error || "⚠️ Background processing engine failed.");
+              setIsProcessing(false);
+            }
+          }
+        } catch (pollErr) {
+          console.error("❌ Polling check iteration error:", pollErr);
+        }
+      }, 3000); // Verify every 3 seconds
+
     } else {
       setStatus("error");
-      setStatusMessage(resultData.message || "⚠️ Upload failed.");
+      setStatusMessage(resultData.message || "⚠️ Target upload rejected.");
+      setIsProcessing(false);
     }
   } catch (error) {
-    console.error("❌ Upload error:", error);
+    console.error("❌ Upload processing lifecycle exception:", error);
     setStatus("error");
     setStatusMessage("An error occurred during upload.");
-  } finally {
     setIsProcessing(false);
   }
 };
@@ -222,8 +250,10 @@ return (
               <Text style={composed.successMessage}>✅ File is ready for download!</Text>
             )}
 
-            {status === "error" && (
-              <Text style={composed.errorMessage}>❌ {statusMessage}</Text>
+            {(status === "error" || status === "processing") && (
+              <Text style={status === "error" ? composed.errorMessage : composed.successMessage}>
+                {status === "error" ? "❌ " : ""}{statusMessage}
+              </Text>
             )}
 
         </View>
