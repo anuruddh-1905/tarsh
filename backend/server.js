@@ -112,6 +112,25 @@ app.get("/api/test", (req, res) => {
   res.json({ message: "Background working fine!" });
 });
 
+// Attack 1 — Can Express reach Python?
+app.get("/api/debug/python-health", async (req, res) => {
+  try {
+    const response = await axios.get(`${PYTHON_ENGINE_URL}/health`);
+    res.json({
+      success: true,
+      data: response.data,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+      code: err.code,
+      status: err.response?.status,
+      data: err.response?.data,
+    });
+  }
+});
+
 // New: manually ping Python engine to verify connectivity
 app.get("/api/ping-python", async (req, res) => {
   const url = `${PYTHON_ENGINE_URL}/health`;
