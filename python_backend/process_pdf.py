@@ -20,6 +20,20 @@ from firebase_admin import credentials, firestore
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # =========================================================
+# STARTUP DIAGNOSTICS
+# =========================================================
+
+print("\n================================================")
+print("🐍 PYTHON ENGINE BOOTING")
+print("================================================")
+print("Time:", datetime.utcnow().isoformat())
+print("PORT:", os.environ.get("PORT", "NOT SET (will default to 6000)"))
+print("GOOGLE_APPLICATION_CREDENTIALS_JSON:", bool(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")))
+print("GCS_BUCKET: prime-app-infographics")
+print("PROJECT_ID: prime-app-467705")
+print("================================================\n")
+
+# =========================================================
 # CONFIG & SECURE INITIALIZATION
 # =========================================================
 
@@ -27,48 +41,85 @@ GCS_BUCKET = "prime-app-infographics"
 PROJECT_ID = "prime-app-467705"
 SERVICE_ACCOUNT_FILE = "service-account.json"
 
-# Check if running on Render with environment variable injection
-if "GOOGLE_APPLICATION_CREDENTIALS_JSON" in os.environ:
-    # Production Environment
-    try:
+storage_client = None
+firestore_client = None
+bucket = None
+db = None
+INIT_ERROR = None
+
+try:
+    if "GOOGLE_APPLICATION_CREDENTIALS_JSON" in os.environ:
+        print("✅ Using credentials from environment variable.")
         cred_json = json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
         cred = credentials.Certificate(cred_json)
-        
-        # Instantiate clients with explicit memory credentials
         storage_client = storage.Client(credentials=cred.get_credential(), project=PROJECT_ID)
         firestore_client = firestore.Client(credentials=cred.get_credential(), project=PROJECT_ID)
-    except Exception as e:
-        print(f"❌ Error parsing GOOGLE_APPLICATION_CREDENTIALS_JSON: {e}")
-        raise e
-else:
-    # Local Development Fallback
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_FILE
-    cred = credentials.Certificate(SERVICE_ACCOUNT_FILE)
-    storage_client = storage.Client()
-    firestore_client = firestore.Client()
+    else:
+        print("✅ Using credentials from service-account.json.")
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_FILE
+        cred = credentials.Certificate(SERVICE_ACCOUNT_FILE)
+        storage_client = storage.Client()
+        firestore_client = firestore.Client()
 
-# Initialize Firebase Admin SDK precisely once
-if not firebase_admin._apps:
-    firebase_admin.initialize_app(cred)
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app(cred)
 
-bucket = storage_client.bucket(GCS_BUCKET)
-db = firestore.client()
+    bucket = storage_client.bucket(GCS_BUCKET)
+    db = firestore.client()
+
+    print("✅ Firebase + GCS initialized successfully.")
+
+except Exception as e:
+    INIT_ERROR = str(e)
+    print(f"❌ INITIALIZATION FAILED: {e}")
+    # Don't crash — let the server start so /health can report the error
 
 app = Flask(__name__)
 CORS(app)
+
+# =========================================================
+# HEALTH CHECK (required by Node's /api/ping-python)
+# =========================================================
+
+@app.route("/health", methods=["GET"])
+def health():
+    """
+    Called by Node backend's /api/ping-python to verify Python is reachable.
+    Returns initialization status so you can diagnose credential issues remotely.
+    """
+    if INIT_ERROR:
+        return jsonify({
+            "status": "unhealthy",
+            "error": INIT_ERROR,
+            "hint": "Firebase/GCS failed to initialize — check GOOGLE_APPLICATION_CREDENTIALS_JSON",
+            "time": datetime.utcnow().isoformat(),
+        }), 500
+
+    return jsonify({
+        "status": "healthy",
+        "time": datetime.utcnow().isoformat(),
+        "gcs_bucket": GCS_BUCKET,
+        "project": PROJECT_ID,
+        "firebase_initialized": bool(firebase_admin._apps),
+    }), 200
 
 # =========================================================
 # INPUT HANDLER
 # =========================================================
 
 def download_file_from_gcs(file_url):
+    print(f"⬇️  Downloading from GCS: {file_url}")
     filename = file_url.split("/")[-1]
     blob = bucket.blob(filename)
+
+    if not blob.exists():
+        raise FileNotFoundError(f"File not found in GCS bucket: {filename}")
 
     buffer = io.BytesIO()
     blob.download_to_file(buffer)
     buffer.seek(0)
 
+    print(f"✅ Downloaded: {filename}")
     return buffer, filename
 
 # =========================================================
@@ -77,6 +128,7 @@ def download_file_from_gcs(file_url):
 
 def extract_data(file_buffer, filename):
     ext = filename.split(".")[-1].lower()
+    print(f"📄 Extracting data from: {filename} (type: {ext})")
     tables = []
 
     if ext in ["xls", "xlsx"]:
@@ -94,11 +146,13 @@ def extract_data(file_buffer, filename):
         for page in doc:
             text += page.get_text()
         doc.close()
+        print(f"📝 Extracted {len(text)} characters from PDF.")
         tables.append({"name": "pdf_text", "text": text})
 
     else:
-        raise ValueError("Unsupported file type")
+        raise ValueError(f"Unsupported file type: .{ext}")
 
+    print(f"✅ Extracted {len(tables)} table(s).")
     return tables
 
 # =========================================================
@@ -107,8 +161,11 @@ def extract_data(file_buffer, filename):
 
 def analyze_dataframe(df):
     summary = {}
+    numeric_cols = df.select_dtypes(include="number").columns
 
-    for col in df.select_dtypes(include="number").columns:
+    print(f"📊 Analyzing {len(numeric_cols)} numeric column(s): {list(numeric_cols)}")
+
+    for col in numeric_cols:
         summary[col] = {
             "min": float(df[col].min()),
             "max": float(df[col].max()),
@@ -127,7 +184,8 @@ def generate_charts(df, doc_id):
     chart_files = []
     numeric_cols = df.select_dtypes(include="number").columns
 
-    for col in numeric_cols[:2]:
+    for col in list(numeric_cols)[:2]:
+        print(f"📈 Generating chart for column: {col}")
         plt.figure(figsize=(4, 3))
         df[col].plot(kind="bar", title=col)
 
@@ -136,6 +194,7 @@ def generate_charts(df, doc_id):
         plt.close()
 
         chart_files.append(chart_path)
+        print(f"✅ Chart saved: {chart_path}")
 
     return chart_files
 
@@ -151,6 +210,7 @@ def run_engine(tables, doc_id):
             charts = generate_charts(df, doc_id)
             return summary, charts
 
+    print("⚠️  No tabular data found — PDF may be text-only. Returning empty summary.")
     return {}, []
 
 # =========================================================
@@ -158,6 +218,7 @@ def run_engine(tables, doc_id):
 # =========================================================
 
 def create_pdf(title, numeric_summary, charts, output_path):
+    print(f"📝 Composing output PDF: {output_path}")
     c = canvas.Canvas(output_path, pagesize=letter)
     width, height = letter
 
@@ -167,10 +228,13 @@ def create_pdf(title, numeric_summary, charts, output_path):
     c.setFont("Helvetica", 12)
     y = height - 80
 
+    if not numeric_summary:
+        c.drawString(40, y, "No numeric data found in uploaded file.")
+        y -= 20
+
     for col, stats in numeric_summary.items():
         c.drawString(
-            40,
-            y,
+            40, y,
             f"{col} → mean: {stats['mean']} | min: {stats['min']} | max: {stats['max']}",
         )
         y -= 14
@@ -185,44 +249,63 @@ def create_pdf(title, numeric_summary, charts, output_path):
         y -= 220
 
     c.save()
+    print(f"✅ PDF composed successfully.")
 
 # =========================================================
 # STORAGE
 # =========================================================
 
 def upload_pdf_to_gcs(local_path, doc_id):
-    blob = bucket.blob(f"infographics/{doc_id}.pdf")
+    destination = f"infographics/{doc_id}.pdf"
+    print(f"⬆️  Uploading PDF to GCS: {destination}")
+    blob = bucket.blob(destination)
     blob.upload_from_filename(local_path, content_type="application/pdf")
 
-    return f"https://storage.googleapis.com/{GCS_BUCKET}/infographics/{doc_id}.pdf"
+    url = f"https://storage.googleapis.com/{GCS_BUCKET}/{destination}"
+    print(f"✅ Uploaded to: {url}")
+    return url
 
 # =========================================================
-# API ROUTE (ENGINE CONTROLLER)
+# ANALYZE ROUTE (called by Node backend)
 # =========================================================
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
+    print("\n========== /analyze CALLED ==========")
+    print("Time:", datetime.utcnow().isoformat())
+
+    # Guard: fail fast if init failed
+    if INIT_ERROR:
+        print(f"❌ Cannot process — initialization failed: {INIT_ERROR}")
+        return jsonify({"status": "error", "message": f"Server init failed: {INIT_ERROR}"}), 500
+
     try:
         data = request.json
+        print("Request payload:", data)
+
         file_url = data.get("pdf_url")
         doc_id = data.get("infographicId") or data.get("doc_id")
 
-        if not file_url or not doc_id:
-            return jsonify({"status": "error", "message": "Missing inputs"}), 400
+        if not file_url:
+            return jsonify({"status": "error", "message": "Missing: pdf_url"}), 400
+        if not doc_id:
+            return jsonify({"status": "error", "message": "Missing: infographicId"}), 400
 
-        # 1. Input
+        print(f"Processing doc_id: {doc_id}")
+        print(f"File URL: {file_url}")
+
+        # 1. Download
         buffer, filename = download_file_from_gcs(file_url)
 
-        # 2. Normalize
+        # 2. Extract
         tables = extract_data(buffer, filename)
 
-        # 3. Engine
+        # 3. Analyze
         numeric_summary, charts = run_engine(tables, doc_id)
 
-        # 4. PDF
+        # 4. Compose PDF
         os.makedirs("/tmp", exist_ok=True)
         pdf_path = f"/tmp/{doc_id}.pdf"
-
         create_pdf(
             title=f"Infographic Summary - {filename}",
             numeric_summary=numeric_summary,
@@ -230,10 +313,11 @@ def analyze():
             output_path=pdf_path,
         )
 
-        # 5. Storage
+        # 5. Upload to GCS
         pdf_url = upload_pdf_to_gcs(pdf_path, doc_id)
 
-        # 6. Metadata update
+        # 6. Update Firestore
+        print(f"📝 Updating Firestore doc: {doc_id}")
         firestore_client.collection("infographics").document(doc_id).set(
             {
                 "status": "completed",
@@ -244,11 +328,23 @@ def analyze():
             },
             merge=True,
         )
+        print(f"✅ Firestore updated for doc: {doc_id}")
+        print("========== /analyze DONE ==========\n")
 
         return jsonify({"status": "success", "download_url": pdf_url})
 
+    except FileNotFoundError as e:
+        print(f"❌ File not found: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 404
+
+    except ValueError as e:
+        print(f"❌ Value error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 400
+
     except Exception as e:
-        print(" Engine error:", e)
+        import traceback
+        print("❌ Engine error:", e)
+        print(traceback.format_exc())
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # =========================================================
@@ -269,14 +365,12 @@ def signup():
     if users_ref.where("email", "==", email).get():
         return jsonify({"message": "Email already exists"}), 409
 
-    users_ref.add(
-        {
-            "username": username,
-            "email": email,
-            "password": generate_password_hash(password),
-            "createdAt": firestore.SERVER_TIMESTAMP,
-        }
-    )
+    users_ref.add({
+        "username": username,
+        "email": email,
+        "password": generate_password_hash(password),
+        "createdAt": firestore.SERVER_TIMESTAMP,
+    })
 
     return jsonify({"message": "Account created"}), 201
 
@@ -316,12 +410,10 @@ def reset_password():
     if not query:
         return jsonify({"message": "User not found"}), 404
 
-    query[0].reference.update(
-        {
-            "password": generate_password_hash(new_password),
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        }
-    )
+    query[0].reference.update({
+        "password": generate_password_hash(new_password),
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
 
     return jsonify({"message": "Password updated successfully"}), 200
 
@@ -330,6 +422,6 @@ def reset_password():
 # =========================================================
 
 if __name__ == "__main__":
-    # Dynamically bind to the port assigned by Render, default to 6000 locally.
     port = int(os.environ.get("PORT", 6000))
+    print(f"\n✅ Python engine starting on port {port}\n")
     app.run(host="0.0.0.0", port=port, debug=False)

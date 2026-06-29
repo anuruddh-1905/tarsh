@@ -3,7 +3,7 @@ const cors = require("cors");
 const multer = require("multer");
 const { Storage } = require("@google-cloud/storage");
 const path = require("path");
-const fs = require("fs"); // 1. Imported fs module
+const fs = require("fs");
 const { Firestore } = require("@google-cloud/firestore");
 const axios = require("axios");
 
@@ -12,7 +12,8 @@ const fetch = (...args) =>
 
 const app = express();
 
-// 2. Startup diagnostics
+/* ---------------- STARTUP DIAGNOSTICS ---------------- */
+
 console.log("\n================================================");
 console.log("🚀 EXPRESS SERVER BOOTING");
 console.log("================================================");
@@ -21,7 +22,7 @@ console.log("Node Version:", process.version);
 console.log("Working Directory:", __dirname);
 console.log("PORT:", process.env.PORT);
 console.log("NODE_ENV:", process.env.NODE_ENV);
-console.log("PYTHON_ENGINE_URL:", process.env.PYTHON_ENGINE_URL);
+console.log("PYTHON_ENGINE_URL:", process.env.PYTHON_ENGINE_URL || "⚠️  NOT SET");
 console.log(
   "GOOGLE_APPLICATION_CREDENTIALS_JSON:",
   !!process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
@@ -32,11 +33,13 @@ console.log(
 );
 console.log("================================================\n");
 
+/* ---------------- MIDDLEWARE ---------------- */
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 3. Log every incoming request
+// Log every incoming request
 app.use((req, res, next) => {
   console.log("\n================ REQUEST ================");
   console.log(new Date().toISOString());
@@ -46,13 +49,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// Render injects a dynamic PORT environment variable. Fallback to 5000 locally.
-const port = process.env.PORT || 5000;
+/* ---------------- CONFIG ---------------- */
 
-// Dynamic internal or external URL for the Python Flask runtime
+const port = process.env.PORT || 5000;
 const PYTHON_ENGINE_URL = process.env.PYTHON_ENGINE_URL || "http://127.0.0.1:6000";
 
-/* ---------------- CONFIG & SECURE INITIALIZATION ---------------- */
+/* ---------------- GOOGLE CREDENTIALS ---------------- */
 
 let firestoreOptions = { projectId: "prime-app-467705" };
 let storageOptions = { projectId: "prime-app-467705" };
@@ -62,6 +64,7 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
     const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
     firestoreOptions.credentials = credentials;
     storageOptions.credentials = credentials;
+    console.log("✅ Using credentials from environment variable.");
   } catch (error) {
     console.error("❌ Error parsing GOOGLE_APPLICATION_CREDENTIALS_JSON:", error.message);
   }
@@ -69,35 +72,67 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
   const serviceKey = path.join(__dirname, "service-account.json");
   firestoreOptions.keyFilename = serviceKey;
   storageOptions.keyFilename = serviceKey;
+  console.log("✅ Using credentials from service-account.json.");
 }
 
 const firestore = new Firestore(firestoreOptions);
 const storage = new Storage(storageOptions);
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-});
+const upload = multer({ storage: multer.memoryStorage() });
 
 /* ---------------- DIAGNOSTIC ENDPOINTS ---------------- */
 
-// 4. Added diagnostic utility routes
+app.get("/", (req, res) => {
+  res.send("Backend Running ✅");
+});
+
 app.get("/whoami", (req, res) => {
   res.json({
     server: "Express Backend",
     time: new Date(),
     node: process.version,
-    port: process.env.PORT
+    port: process.env.PORT,
   });
 });
 
+// Single /env-check route (removed duplicate that was at the bottom)
 app.get("/env-check", (req, res) => {
+  const pyUrl = process.env.PYTHON_ENGINE_URL;
   res.json({
-    PORT: process.env.PORT,
-    NODE_ENV: process.env.NODE_ENV,
-    PYTHON_ENGINE_URL: process.env.PYTHON_ENGINE_URL,
+    PORT: process.env.PORT || "NOT SET",
+    NODE_ENV: process.env.NODE_ENV || "NOT SET",
+    PYTHON_ENGINE_URL: pyUrl || "NOT SET ⚠️",
+    PYTHON_ENGINE_URL_SET: !!pyUrl,
     GOOGLE_APPLICATION_CREDENTIALS_JSON: !!process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON,
-    SERVICE_ACCOUNT_EXISTS: fs.existsSync(path.join(__dirname, "service-account.json"))
+    SERVICE_ACCOUNT_EXISTS: fs.existsSync(path.join(__dirname, "service-account.json")),
   });
+});
+
+app.get("/api/test", (req, res) => {
+  res.json({ message: "Background working fine!" });
+});
+
+// New: manually ping Python engine to verify connectivity
+app.get("/api/ping-python", async (req, res) => {
+  const url = `${PYTHON_ENGINE_URL}/health`;
+  console.log("Pinging Python engine at:", url);
+  try {
+    const response = await axios.get(url, { timeout: 5000 });
+    res.json({ success: true, url, status: response.status, data: response.data });
+  } catch (err) {
+    console.error("Python ping failed:", err.message);
+    res.status(502).json({
+      success: false,
+      url,
+      error: err.message,
+      code: err.code,
+      hint: err.code === "ECONNREFUSED"
+        ? "Python service is not reachable — check PYTHON_ENGINE_URL"
+        : err.code === "ENOTFOUND"
+        ? "DNS lookup failed — PYTHON_ENGINE_URL hostname is wrong"
+        : "Unknown error — check Deploy Logs",
+    });
+  }
 });
 
 /* ---------------- AUTH PROXY ROUTES ---------------- */
@@ -109,7 +144,6 @@ app.post("/api/auth/signup", async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body),
     });
-
     const data = await response.json();
     return res.status(response.status).json(data);
   } catch (error) {
@@ -125,7 +159,6 @@ app.post("/api/auth/login", async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body),
     });
-
     const data = await response.json();
     return res.status(response.status).json(data);
   } catch (error) {
@@ -141,7 +174,6 @@ app.post("/api/auth/reset-password", async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body),
     });
-
     const data = await response.json();
     return res.status(response.status).json(data);
   } catch (error) {
@@ -150,7 +182,7 @@ app.post("/api/auth/reset-password", async (req, res) => {
   }
 });
 
-/* ---------------- INFOGRAPHIC LIST ---------------- */
+/* ---------------- INFOGRAPHIC ROUTES ---------------- */
 
 app.get("/api/infographic", async (req, res) => {
   try {
@@ -166,20 +198,29 @@ app.get("/api/infographic", async (req, res) => {
   }
 });
 
+// Single infographic by ID (was missing — added)
+app.get("/api/infographic/:id", async (req, res) => {
+  try {
+    const doc = await firestore.collection("infographics").doc(req.params.id).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Infographic not found." });
+    }
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (error) {
+    console.error("Error retrieving infographic:", error);
+    res.status(500).json({ error: "Failed to retrieve infographic." });
+  }
+});
+
 app.get("/api/infographic/download/:id", async (req, res) => {
   try {
     const docId = req.params.id;
-
     const file = storage
       .bucket("prime-app-infographics")
       .file(`infographics/${docId}.pdf`);
 
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="infographic-${docId}.pdf"`
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="infographic-${docId}.pdf"`);
     res.setHeader("Content-Type", "application/pdf");
-
     file.createReadStream().pipe(res);
   } catch (err) {
     console.error("Download error:", err);
@@ -193,17 +234,15 @@ app.post(
   "/api/infographic/create",
   upload.single("pdfFile"),
   async (req, res) => {
-    // 5. Upload route initial data logging
     console.log("\n========== UPLOAD START ==========");
     console.log("Time:", new Date());
     console.log("Body:", req.body);
-    console.log("Headers:", req.headers);
     if (req.file) {
       console.log("Filename:", req.file.originalname);
       console.log("Mime:", req.file.mimetype);
       console.log("Size:", req.file.size);
     } else {
-      console.log("No file received");
+      console.log("⚠️  No file received");
     }
     console.log("==================================");
 
@@ -217,12 +256,9 @@ app.post(
 
     try {
       /* ---- Upload to GCS ---- */
-      // 6. Detailed processing logs
       console.log("Uploading PDF to Google Cloud Storage...");
-      await file.save(req.file.buffer, {
-        contentType: req.file.mimetype,
-      });
-      console.log("GCS upload successful.");
+      await file.save(req.file.buffer, { contentType: req.file.mimetype });
+      console.log("✅ GCS upload successful.");
 
       const publicUrl = `https://storage.googleapis.com/${bucketName}/${filename}`;
 
@@ -239,34 +275,44 @@ app.post(
       const infographicRef = firestore.collection("infographics").doc();
       await infographicRef.set(newInfographic);
       const infographicId = infographicRef.id;
-      console.log("Firestore document created:", infographicId);
+      console.log("✅ Firestore document created:", infographicId);
 
       /* ---- Trigger Python engine in background ---- */
       const flaskUrl = `${PYTHON_ENGINE_URL}/analyze`;
-      console.log("Calling Python Engine:", flaskUrl);
-      console.log({ infographicId, pdf_url: publicUrl });
+      console.log("🐍 Calling Python Engine:", flaskUrl);
+      console.log("Payload:", { infographicId, pdf_url: publicUrl });
 
+      // Added 60s timeout so failed calls don't hang silently
       axios
-        .post(flaskUrl, {
-          infographicId,
-          pdf_url: publicUrl,
-          title: newInfographic.title,
-        })
+        .post(
+          flaskUrl,
+          { infographicId, pdf_url: publicUrl, title: newInfographic.title },
+          { timeout: 60000 }
+        )
         .then(() => {
-          console.log("Python engine returned SUCCESS");
-          console.log("Flask processing completed for", infographicId);
+          console.log("✅ Python engine returned SUCCESS for", infographicId);
         })
         .catch(async (error) => {
-          // Deep Python Engine Error Inspection
-          console.log("\n========= PYTHON ERROR =========");
-          console.error(error);
+          console.log("\n========= PYTHON CALL ERROR =========");
           console.error("Message:", error.message);
           console.error("Code:", error.code);
+          console.error("URL attempted:", flaskUrl);
           if (error.response) {
-            console.error("Status:", error.response.status);
-            console.error("Response:", error.response.data);
+            console.error("HTTP Status:", error.response.status);
+            console.error("Response body:", error.response.data);
           }
-          console.log("================================");
+          if (error.code === "ECONNREFUSED") {
+            console.error("❌ ECONNREFUSED — Python service is not reachable at:", PYTHON_ENGINE_URL);
+            console.error("   → Check that PYTHON_ENGINE_URL env var is set correctly on Railway.");
+          }
+          if (error.code === "ENOTFOUND") {
+            console.error("❌ ENOTFOUND — Hostname could not be resolved:", PYTHON_ENGINE_URL);
+            console.error("   → PYTHON_ENGINE_URL may be wrong or missing.");
+          }
+          if (error.code === "ETIMEDOUT") {
+            console.error("❌ ETIMEDOUT — Python service took too long to respond.");
+          }
+          console.log("=====================================\n");
 
           try {
             await firestore.collection("infographics").doc(infographicId).update({
@@ -275,7 +321,7 @@ app.post(
               updatedAt: new Date(),
             });
           } catch (updateError) {
-            console.error("Failed to update Firestore after processing error:", updateError);
+            console.error("Failed to update Firestore after Python error:", updateError.message);
           }
         });
 
@@ -284,12 +330,10 @@ app.post(
         message: "Infographic accepted for processing",
         infographicId,
       });
-
       console.log("📤 202 Accepted sent to frontend for", infographicId);
+
     } catch (error) {
-      // 7. Core Route Try-Catch Error Inspection
       console.log("\n========== SERVER ERROR ==========");
-      console.error(error);
       console.error("Message:", error.message);
       console.error("Code:", error.code);
       console.error("Stack:", error.stack);
@@ -298,10 +342,7 @@ app.post(
         console.error("Response:", error.response.data);
       }
       console.log("==================================");
-
-      res.status(500).json({
-        error: "An error occurred during the upload process.",
-      });
+      res.status(500).json({ error: "An error occurred during the upload process." });
     }
   }
 );
@@ -328,15 +369,8 @@ app.delete("/api/infographics/:id", async (req, res) => {
   }
 });
 
-/* ---------------- HEALTH CHECK ---------------- */
-
-app.get("/api/test", (req, res) => {
-  res.json({ message: "Background working fine!" });
-});
-
 /* ---------------- GLOBAL CRASH HANDLERS ---------------- */
 
-// 8. Capture hidden app crashes or unhandled promise updates
 process.on("uncaughtException", (err) => {
   console.log("\n******** UNCAUGHT EXCEPTION ********");
   console.error(err);
@@ -349,10 +383,10 @@ process.on("unhandledRejection", (err) => {
 
 /* ---------------- START SERVER ---------------- */
 
-// 9. Structured boot logging
 app.listen(port, () => {
   console.log("\n====================================");
-  console.log("SERVER READY");
-  console.log("Listening Port:", port);
+  console.log("✅ SERVER READY");
+  console.log("Listening on port:", port);
+  console.log("Python Engine URL:", PYTHON_ENGINE_URL);
   console.log("====================================\n");
 });
