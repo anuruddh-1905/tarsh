@@ -400,6 +400,24 @@ process.on("unhandledRejection", (err) => {
   console.error(err);
 });
 
+app.get("/debug-python", async (req, res) => {
+  const axios = require("axios");
+
+  try {
+    const response = await axios.get(
+      "http://tarsh-8947:8080/health"
+    );
+
+    res.json(response.data);
+  } catch (err) {
+    res.json({
+      message: err.message,
+      code: err.code,
+      response: err.response?.data,
+    });
+  }
+});
+
 /* ---------------- START SERVER ---------------- */
 
 app.listen(port, () => {
