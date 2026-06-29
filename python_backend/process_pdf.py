@@ -417,6 +417,12 @@ def reset_password():
 
     return jsonify({"message": "Password updated successfully"}), 200
 
+@app.route("/test")
+def test():
+    return {
+        "status": "python alive"
+    }
+
 # =========================================================
 # START SERVER
 # =========================================================
